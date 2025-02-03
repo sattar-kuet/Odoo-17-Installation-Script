@@ -4,7 +4,7 @@
 # Author: Modified from Yenthe Van Ginneken's script
 ################################################################################
 
-OE_USER="odoo"
+OE_USER="odoo17"
 OE_HOME="/$OE_USER"
 OE_HOME_EXT="/$OE_USER/${OE_USER}-server"
 
@@ -25,19 +25,19 @@ GENERATE_RANDOM_PASSWORD="True"
 OE_SUPERADMIN="admin"
 
 # Set the website name
-WEBSITE_NAME="odoo.local"
+WEBSITE_NAME="domain.com"
 
 # Set the default Odoo longpolling port
 LONGPOLLING_PORT="8072"
 
 # Set to "True" to install Nginx
-INSTALL_NGINX="False"
+INSTALL_NGINX="True"
 
 # Set to "True" to enable SSL with certbot
-ENABLE_SSL="False"
+ENABLE_SSL="True"
 
 # Email for SSL certificate registration
-ADMIN_EMAIL="odoo@example.com"
+ADMIN_EMAIL="sattar.kuet@gmail.com"
 
 #--------------------------------------------------
 # Update Server
