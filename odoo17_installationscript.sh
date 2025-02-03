@@ -1,210 +1,128 @@
 #!/bin/bash
 ################################################################################
-# Script for installing Odoo 17 on Ubuntu 18.04, 20.04, 22.04
-# Author: Modified from Yenthe Van Ginneken's script
+# Script to install Odoo 17 on Ubuntu 24.04 LTS with Nginx and SSL
 ################################################################################
 
-OE_USER="odoo17"
-OE_HOME="/$OE_USER"
-OE_HOME_EXT="/$OE_USER/${OE_USER}-server"
+# Set variables
+ODOO_USER="odoo17"
+ODOO_HOME="/opt/$ODOO_USER"
+ODOO_CONFIG="/etc/$ODOO_USER.conf"
+ODOO_PORT="8069"
+ODOO_SERVICE="odoo17.service"
+DOMAIN="biz.userfantasy.com"  # <-- Replace with your domain
+EMAIL="sattar.kuet@email.com"    # <-- Replace with your email for SSL
 
-# Set Odoo version
-OE_VERSION="17.0"
-
-# Set default Odoo port
-OE_PORT="8069"
-
-# Install PostgreSQL 15 (recommended for Odoo 17)
-INSTALL_POSTGRESQL_FIFTEEN="True"
-
-# Set this to True if you want to install the Odoo Enterprise version
-IS_ENTERPRISE="False"
-
-# Set the superadmin password (or generate a random one)
-GENERATE_RANDOM_PASSWORD="True"
-OE_SUPERADMIN="admin"
-
-# Set the website name
-WEBSITE_NAME="domain.com"
-
-# Set the default Odoo longpolling port
-LONGPOLLING_PORT="8072"
-
-# Set to "True" to install Nginx
-INSTALL_NGINX="True"
-
-# Set to "True" to enable SSL with certbot
-ENABLE_SSL="True"
-
-# Email for SSL certificate registration
-ADMIN_EMAIL="sattar.kuet@gmail.com"
-
-#--------------------------------------------------
-# Update Server
-#--------------------------------------------------
-echo -e "\n---- Update Server ----"
+# Update system
+echo -e "\nUpdating system..."
 sudo apt update && sudo apt upgrade -y
 
-#--------------------------------------------------
-# Install PostgreSQL Server
-#--------------------------------------------------
-echo -e "\n---- Install PostgreSQL Server ----"
-if [ $INSTALL_POSTGRESQL_FIFTEEN = "True" ]; then
-    echo -e "\n---- Installing PostgreSQL 15 ----"
-    sudo apt install -y postgresql-15
-else
-    echo -e "\n---- Installing default PostgreSQL version ----"
-    sudo apt install -y postgresql postgresql-server-dev-all
-fi
+# Install dependencies
+echo -e "\nInstalling required packages..."
+sudo apt install -y python3 python3-pip python3-venv python3-dev \
+    libxml2-dev libxslt1-dev zlib1g-dev libsasl2-dev \
+    libldap2-dev build-essential libjpeg-dev libpq-dev \
+    libffi-dev libmysqlclient-dev libtiff5-dev libopenjp2-7-dev \
+    liblcms2-dev libwebp-dev libharfbuzz-dev libfribidi-dev \
+    libx11-6 libxcb1 libxext6 libxrender1 xfonts-75dpi \
+    xfonts-base wkhtmltopdf git curl nginx certbot python3-certbot-nginx
 
-echo -e "\n---- Creating the ODOO PostgreSQL User ----"
-sudo su - postgres -c "createuser -s $OE_USER" 2> /dev/null || true
+# Install PostgreSQL
+echo -e "\nInstalling PostgreSQL..."
+sudo apt install -y postgresql
+sudo systemctl enable --now postgresql
 
-#--------------------------------------------------
-# Install Dependencies
-#--------------------------------------------------
-echo -e "\n---- Installing Dependencies ----"
-sudo apt install -y python3 python3-pip python3-dev python3-venv python3-wheel \
-    libxslt-dev libzip-dev libldap2-dev libsasl2-dev libjpeg-dev libpq-dev \
-    nodejs npm git curl libxml2-dev libxslt1-dev libjpeg8-dev zlib1g-dev \
-    libpng-dev gdebi
+# Create PostgreSQL user
+echo -e "\nCreating PostgreSQL user..."
+sudo -u postgres createuser -s $ODOO_USER || true
 
-#--------------------------------------------------
-# Install Python Packages
-#--------------------------------------------------
-echo -e "\n---- Installing Python packages ----"
-sudo -H pip3 install -r https://github.com/odoo/odoo/raw/${OE_VERSION}/requirements.txt
-sudo -H pip3 install pillow reportlab psycopg2-binary
+# Create Odoo system user
+echo -e "\nCreating Odoo system user..."
+sudo useradd -m -d $ODOO_HOME -U -r -s /bin/bash $ODOO_USER
+sudo mkdir -p $ODOO_HOME/custom-addons
+sudo chown -R $ODOO_USER:$ODOO_USER $ODOO_HOME
 
-#--------------------------------------------------
-# Install Node.js, npm, and rtlcss
-#--------------------------------------------------
-echo -e "\n---- Installing Node.js, npm, and rtlcss ----"
-sudo npm install -g rtlcss
+# Clone Odoo 17 source
+echo -e "\nCloning Odoo 17 repository..."
+sudo -u $ODOO_USER git clone --depth 1 --branch 17.0 https://github.com/odoo/odoo.git $ODOO_HOME/odoo
 
-#--------------------------------------------------
-# Create Odoo System User
-#--------------------------------------------------
-echo -e "\n---- Creating Odoo System User ----"
-sudo adduser --system --quiet --shell=/bin/bash --home=$OE_HOME --gecos 'ODOO' --group $OE_USER
-sudo adduser $OE_USER sudo
+# Setup virtual environment
+echo -e "\nSetting up Python virtual environment..."
+sudo -u $ODOO_USER python3 -m venv $ODOO_HOME/venv
+sudo -u $ODOO_USER $ODOO_HOME/venv/bin/pip install --upgrade pip wheel
+sudo -u $ODOO_USER $ODOO_HOME/venv/bin/pip install -r $ODOO_HOME/odoo/requirements.txt
 
-#--------------------------------------------------
-# Create Log Directory
-#--------------------------------------------------
-echo -e "\n---- Creating Log Directory ----"
-sudo mkdir -p /var/log/$OE_USER
-sudo chown $OE_USER:$OE_USER /var/log/$OE_USER
-
-#--------------------------------------------------
-# Install Odoo
-#--------------------------------------------------
-echo -e "\n==== Installing Odoo Server ===="
-sudo git clone --depth 1 --branch $OE_VERSION https://github.com/odoo/odoo $OE_HOME_EXT
-
-if [ $IS_ENTERPRISE = "True" ]; then
-    echo -e "\n---- Installing Odoo Enterprise ----"
-    sudo su $OE_USER -c "mkdir $OE_HOME/enterprise"
-    sudo su $OE_USER -c "mkdir $OE_HOME/enterprise/addons"
-    sudo git clone --depth 1 --branch $OE_VERSION https://github.com/odoo/enterprise "$OE_HOME/enterprise/addons"
-    sudo -H pip3 install num2words ofxparse dbfread ebaysdk firebase_admin
-fi
-
-echo -e "\n---- Creating Custom Addons Directory ----"
-sudo su $OE_USER -c "mkdir $OE_HOME/custom"
-sudo su $OE_USER -c "mkdir $OE_HOME/custom/addons"
-
-echo -e "\n---- Setting Permissions on Home Folder ----"
-sudo chown -R $OE_USER:$OE_USER $OE_HOME/*
-
-#--------------------------------------------------
-# Create Odoo Configuration File
-#--------------------------------------------------
-echo -e "\n---- Creating Odoo Configuration File ----"
-sudo tee /etc/${OE_USER}.conf <<EOF
+# Configure Odoo
+echo -e "\nCreating Odoo configuration file..."
+sudo bash -c "cat > $ODOO_CONFIG" <<EOF
 [options]
-admin_passwd = ${OE_SUPERADMIN}
-xmlrpc_port = ${OE_PORT}
-longpolling_port = ${LONGPOLLING_PORT}
-logfile = /var/log/${OE_USER}/${OE_USER}.log
-addons_path = ${OE_HOME_EXT}/addons,${OE_HOME}/custom/addons
+admin_passwd = admin
+db_host = False
+db_port = False
+db_user = odoo17
+db_password = False
+addons_path = $ODOO_HOME/odoo/addons,$ODOO_HOME/custom-addons
+xmlrpc_port = $ODOO_PORT
+logfile = /var/log/$ODOO_USER.log
 EOF
 
-sudo chown $OE_USER:$OE_USER /etc/${OE_USER}.conf
-sudo chmod 640 /etc/${OE_USER}.conf
+sudo chown $ODOO_USER:$ODOO_USER $ODOO_CONFIG
+sudo chmod 640 $ODOO_CONFIG
 
-#--------------------------------------------------
-# Create Systemd Service File
-#--------------------------------------------------
-echo -e "\n---- Creating Systemd Service File ----"
-sudo tee /etc/systemd/system/odoo.service <<EOF
+# Create systemd service
+echo -e "\nCreating systemd service file..."
+sudo bash -c "cat > /etc/systemd/system/$ODOO_SERVICE" <<EOF
 [Unit]
 Description=Odoo 17
-After=network.target
+After=network.target postgresql.service
 
 [Service]
-Type=simple
-User=$OE_USER
-ExecStart=$OE_HOME_EXT/odoo-bin --config=/etc/${OE_USER}.conf
-WorkingDirectory=$OE_HOME_EXT
+User=$ODOO_USER
+Group=$ODOO_USER
+ExecStart=$ODOO_HOME/venv/bin/python3 $ODOO_HOME/odoo/odoo-bin -c $ODOO_CONFIG
+StandardOutput=journal+console
 Restart=always
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# Start Odoo service
+echo -e "\nStarting Odoo service..."
 sudo systemctl daemon-reload
-sudo systemctl enable odoo
-sudo systemctl start odoo
+sudo systemctl enable --now $ODOO_SERVICE
 
-#--------------------------------------------------
-# Install and Configure Nginx (Optional)
-#--------------------------------------------------
-if [ $INSTALL_NGINX = "True" ]; then
-    echo -e "\n---- Installing and Setting Up Nginx ----"
-    sudo apt install -y nginx
-    sudo tee /etc/nginx/sites-available/$WEBSITE_NAME <<EOF
+# Configure Nginx
+echo -e "\nConfiguring Nginx as reverse proxy..."
+sudo bash -c "cat > /etc/nginx/sites-available/odoo" <<EOF
 server {
     listen 80;
-    server_name $WEBSITE_NAME;
+    server_name $DOMAIN;
 
-    proxy_set_header X-Forwarded-Host \$host;
-    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto \$scheme;
-    proxy_set_header X-Real-IP \$remote_addr;
+    access_log /var/log/nginx/odoo.access.log;
+    error_log /var/log/nginx/odoo.error.log;
+
+    proxy_buffers 16 64k;
+    proxy_buffer_size 128k;
 
     location / {
-        proxy_pass http://127.0.0.1:$OE_PORT;
-    }
-
-    location /longpolling {
-        proxy_pass http://127.0.0.1:$LONGPOLLING_PORT;
+        proxy_pass http://127.0.0.1:$ODOO_PORT;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_redirect off;
     }
 }
 EOF
 
-    sudo ln -s /etc/nginx/sites-available/$WEBSITE_NAME /etc/nginx/sites-enabled/$WEBSITE_NAME
-    sudo rm -f /etc/nginx/sites-enabled/default
-    sudo systemctl restart nginx
-fi
+sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/odoo
+sudo nginx -t && sudo systemctl restart nginx
 
-#--------------------------------------------------
-# Enable SSL with Certbot (Optional)
-#--------------------------------------------------
-if [ $INSTALL_NGINX = "True" ] && [ $ENABLE_SSL = "True" ] && [ $ADMIN_EMAIL != "odoo@example.com" ] && [ $WEBSITE_NAME != "_" ]; then
-    echo -e "\n---- Installing SSL Certificate ----"
-    sudo apt install -y certbot python3-certbot-nginx
-    sudo certbot --nginx -d $WEBSITE_NAME --noninteractive --agree-tos --email $ADMIN_EMAIL --redirect
-    sudo systemctl reload nginx
-fi
+# Secure with Let's Encrypt
+echo -e "\nInstalling SSL certificate..."
+sudo certbot --nginx --agree-tos --redirect --hsts --staple-ocsp --email $EMAIL -d $DOMAIN
 
-#--------------------------------------------------
-# Completion Message
-#--------------------------------------------------
-echo "-----------------------------------------------------------"
-echo "Odoo 17 Installation Completed!"
-echo "Access Odoo at: http://your_server_ip:$OE_PORT"
-echo "Start Odoo: sudo systemctl start odoo"
-echo "Stop Odoo: sudo systemctl stop odoo"
-echo "Restart Odoo: sudo systemctl restart odoo"
-echo "-----------------------------------------------------------"
+# Final message
+echo -e "\nOdoo 17 with Nginx and SSL installation completed!"
+echo -e "Access Odoo at: https://$DOMAIN"
+echo -e "To check logs: sudo journalctl -u $ODOO_SERVICE -f"
