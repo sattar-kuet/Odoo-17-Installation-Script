@@ -6,10 +6,10 @@
 
 ODOO_USER="odoo17"
 ODOO_HOME="/opt/$ODOO_USER"
-ODOO_CONFIG="/etc/${ODOO_USER}_userfantasy.conf" # <-- Replace userfantasy
-ODOO_PORT="8069" # <-- Replace with unused port
-ODOO_SERVICE="odoo17_userfantasy.service"  #<-- Replace userfantasy
-DOMAIN="biz.userfantasy.com"  # <-- Replace with your domain
+ODOO_CONFIG="/etc/${ODOO_USER}_itscholar.conf" # <-- Replace userfantasy
+ODOO_PORT="8079" # <-- Replace with unused port
+ODOO_SERVICE="odoo17_itscholar.service"  #<-- Replace userfantasy
+DOMAIN="admin.itscholarbd.com"  # <-- Replace with your domain
 EMAIL="sattar.kuet@email.com"   
 
 
