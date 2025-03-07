@@ -32,4 +32,9 @@ Execute the script to begin the installation process.
 ```bash
 sudo ./odoo17_installationscript.sh
 ```
+### **Restart the server**
+
+```bash
+sudo systemctl restart odoo17.service
+```
 
