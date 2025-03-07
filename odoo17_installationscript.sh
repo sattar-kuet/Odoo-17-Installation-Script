@@ -93,7 +93,7 @@ sudo systemctl enable --now $ODOO_SERVICE
 
 
 echo -e "\nConfiguring Nginx as reverse proxy..."
-sudo bash -c "cat > /etc/nginx/sites-available/odoo" <<EOF
+sudo bash -c "cat > /etc/nginx/sites-available/$DOMAIN" <<EOF
 server {
     listen 80;
     server_name $DOMAIN;
@@ -115,7 +115,7 @@ server {
 }
 EOF
 
-sudo ln -s /etc/nginx/sites-available/odoo /etc/nginx/sites-enabled/odoo
+sudo ln -s /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/$DOMAIN
 sudo nginx -t && sudo systemctl restart nginx
 
 
@@ -124,5 +124,5 @@ sudo certbot --nginx --agree-tos --redirect --hsts --staple-ocsp --email $EMAIL 
 
 
 echo -e "\nOdoo 17 with Nginx and SSL installation completed!"
-echo -e "Access Odoo at: https://$DOMAIN"
+echo -e "Access $DOMAIN at: https://$DOMAIN"
 echo -e "To check logs: sudo journalctl -u $ODOO_SERVICE -f"
